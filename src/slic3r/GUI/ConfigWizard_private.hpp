@@ -121,7 +121,7 @@ struct Materials
 
 	void add_printer_counter(const Preset* preset) {
 		auto it = std::find_if(presets.begin(), presets.end(),
-			[preset](const std::pair<const Preset*, bool>& element) { return element.first == preset; });
+			[preset](const std::pair<const Preset*, bool>& element) { return element.first->alias == preset->alias; });
 		if (it != presets.end())
 			(*it).second ++;
 	}
@@ -149,9 +149,13 @@ struct Materials
 	*/
 	template<class F> void filter_presets(const Preset* printer, const std::string& type, const std::string& vendor, F cb) {
 		for (auto preset : presets) {
-			if ((printer == nullptr || is_compatible_with_printer(PresetWithVendorProfile(*(preset.first), nullptr),
-				PresetWithVendorProfile(*printer, nullptr))) &&
-			    (type.empty() || get_type(preset.first) == type) && (vendor.empty() || get_vendor(preset.first) == vendor)) {
+			const Preset& prst = *(preset.first);
+			const Preset& prntr = *printer;
+		      if ((printer == nullptr || is_compatible_with_printer(PresetWithVendorProfile(prst, prst.vendor), PresetWithVendorProfile(prntr, prntr.vendor))) &&
+			//if ((printer == nullptr || is_compatible_with_printer(PresetWithVendorProfile(prst, nullptr), PresetWithVendorProfile(prntr, nullptr))) &&
+			    (type.empty() || get_type(preset.first) == type) &&
+				(vendor.empty() || get_vendor(preset.first) == vendor)) {
+
 				cb(preset.first, preset.second);
 			}
 		}
@@ -313,8 +317,8 @@ typedef DataList<wxCheckListBox, std::string> PresetList;
 struct PageMaterials: ConfigWizardPage
 {
     Materials *materials;
-    StringList *list_type, *list_vendor;
-    PresetList *list_printer, *list_profile;
+    StringList *list_printer, *list_type, *list_vendor;
+    PresetList *list_profile;
     int sel_printer_prev, sel_type_prev, sel_vendor_prev;
     bool presets_loaded;
 
