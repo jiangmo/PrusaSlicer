@@ -659,7 +659,7 @@ void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
 					break;
 				}
 			}
-			materials->filter_presets(printer, EMPTY, EMPTY, [this](const Preset* p, int printer_counter) {
+			materials->filter_presets(printer, EMPTY, EMPTY, [this](const Preset* p) {
 				const std::string& type = this->materials->get_type(p);
 				if (list_type->find(type) == wxNOT_FOUND) {
 					list_type->append(type, &type);
@@ -694,7 +694,7 @@ void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
 					break;
 				}
 			}
-			materials->filter_presets(printer ,type, EMPTY, [this](const Preset* p, int printer_counter) {
+			materials->filter_presets(printer ,type, EMPTY, [this](const Preset* p) {
 				const std::string& vendor = this->materials->get_vendor(p);
 				if (list_vendor->find(vendor) == wxNOT_FOUND) {
 					list_vendor->append(vendor, &vendor);
@@ -726,13 +726,13 @@ void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
 				}
 			}
 
-			materials->filter_presets(printer, type, vendor, [this](const Preset* p, int printer_counter) {
+			materials->filter_presets(printer, type, vendor, [this](const Preset* p) {
 				bool was_checked = false;
-
+				//size_t printer_counter = materials->get_printer_counter(p);
 				int cur_i = list_profile->find(p->alias);
 				if (cur_i == wxNOT_FOUND)
-					cur_i = list_profile->append(p->alias + " " + std::to_string(printer_counter)/*+ (omnipresent ? "" : " ONLY SOME PRINTERS")*/, &p->alias);
-				//cur_i = list_profile->append((omnipresent ? _("BBBBBBB") : _("AAAAAA")), &p->alias);
+					//cur_i = list_profile->append(p->alias + " " + std::to_string(printer_counter)/*+ (omnipresent ? "" : " ONLY SOME PRINTERS")*/, &p->alias);
+				    cur_i = list_profile->append(p->alias + (materials->get_omnipresent(p) ? "" : " *"), &p->alias);
 				else
 					was_checked = list_profile->IsChecked(cur_i);
 
@@ -1370,7 +1370,7 @@ const std::string Materials::UNKNOWN = "(Unknown)";
 
 void Materials::push(const Preset *preset)
 {
-    presets.emplace_back(preset, 1);
+    presets.emplace_back(preset, 0);
     types.insert(technology & T_FFF
         ? Materials::get_filament_type(preset)
         : Materials::get_material_type(preset));
@@ -1665,6 +1665,7 @@ void ConfigWizard::priv::update_materials(Technology technology)
     if (any_fff_selected && (technology & T_FFF)) {
         filaments.clear();
         aliases_fff.clear();
+		/*
 		BOOST_LOG_TRIVIAL(error) << "------------------";
 		BOOST_LOG_TRIVIAL(error) << "------------------";
 		BOOST_LOG_TRIVIAL(error) << "------------------";
@@ -1674,49 +1675,43 @@ void ConfigWizard::priv::update_materials(Technology technology)
 		BOOST_LOG_TRIVIAL(error) << "------------------";
 		BOOST_LOG_TRIVIAL(error) << "------------------";
 		BOOST_LOG_TRIVIAL(error) << "------------------";
+		*/
         // Iterate filaments in all bundles
         for (const auto &pair : bundles) {
             for (const auto &filament : pair.second.preset_bundle->filaments) {
                 // Check if filament is already added
                 if (filaments.containts(&filament)) {
-					/*for (const auto& printer : pair.second.preset_bundle->printers)
-						if (printer.is_visible && printer.printer_technology() == ptFFF &&
-							!is_compatible_with_printer(PresetWithVendorProfile(filament, nullptr), PresetWithVendorProfile(printer, nullptr))) {
-							filaments.set_omnipresent(&filament, false);
-							break;
-						}*/
 					continue;
 				}
                 // Iterate printers in all bundles
                 // For now, we only allow the profiles to be compatible with another profiles inside the same bundle.
                 // for (const auto &pair : bundles)
 				bool has_incompatible = false;
-				bool added = false;
+				//bool added = false;
                 for (const auto &printer : pair.second.preset_bundle->printers) {
 					if (!printer.is_visible || printer.printer_technology() != ptFFF)
 						continue;
 
                     // Filter out inapplicable printers
-					if (is_compatible_with_printer(PresetWithVendorProfile(filament, nullptr), PresetWithVendorProfile(printer, nullptr))) {
-						BOOST_LOG_TRIVIAL(error) << "COMPATIBLE     " << filament.name << "	@" << printer.name;
+					if (is_compatible_with_printer(PresetWithVendorProfile(filament, filament.vendor), PresetWithVendorProfile(printer, printer.vendor))) {
+						//BOOST_LOG_TRIVIAL(error) << "COMPATIBLE     " << filament.name << "	@" << printer.name;
 						if (!filaments.containts(&filament)) {
 							filaments.push(&filament);
 							if (!filament.alias.empty())
 								aliases_fff[filament.alias].insert(filament.name); //HERE vole
-							added = true;
-						} else {
-							filaments.add_printer_counter(&filament);
-						}
+							//added = true;
+						} 
+						filaments.add_printer_counter(&filament);
 						filaments.add_printer(&printer);
 
 					} else {
-						BOOST_LOG_TRIVIAL(error) << "NOT COMPATIBLE " << filament.name << "	@" << printer.name ;
+						//BOOST_LOG_TRIVIAL(error) << "NOT COMPATIBLE " << filament.name << "	@" << printer.name ;
 						has_incompatible = true;
 					}
 				}
-				BOOST_LOG_TRIVIAL(error) << (filament.alias.empty() ? filament.name : filament.alias) << " counters: " << filaments.get_printer_counter(&filament);
-				if (added)
-					BOOST_LOG_TRIVIAL(error) << (filament.alias.empty() ? filament.name : filament.alias) << " added";
+				//BOOST_LOG_TRIVIAL(error) << (filament.alias.empty() ? filament.name : filament.alias) << " counters: " << filaments.get_printer_counter(&filament);
+				//if (added)
+				//	BOOST_LOG_TRIVIAL(error) << (filament.alias.empty() ? filament.name : filament.alias) << " added";
 
             }
         }

@@ -103,50 +103,32 @@ struct Materials
 			[preset](const std::pair<const Preset*, bool>& element) { return element.first == preset; }) != presets.end();
 
     }
-	/*
-	void set_omnipresent(const Preset* preset, bool omnipresent) {
-		auto it = std::find_if(presets.begin(), presets.end(),
-			[preset](const std::pair<const Preset*, bool>& element) { return element.first == preset; });
-		if (it != presets.end())
-			(*it).second = omnipresent;
-		
-	}
-
+	
 	bool get_omnipresent(const Preset* preset) {
-		auto it = std::find_if(presets.begin(), presets.end(),
-			[preset](const std::pair<const Preset*, bool>& element) { return element.first == preset; });
-		return (*it).second;
+		return get_printer_counter(preset) == printers.size();
 	}
-	*/
 
 	void add_printer_counter(const Preset* preset) {
-		auto it = std::find_if(presets.begin(), presets.end(),
-			[preset](const std::pair<const Preset*, bool>& element) { return element.first->alias == preset->alias; });
-		if (it != presets.end())
-			(*it).second ++;
+		for (auto it = presets.begin(); it != presets.end(); ++it) {
+			if ((*it).first->alias == preset->alias)
+				(*it).second += 1;
+		}
 	}
 
 	size_t get_printer_counter(const Preset* preset) {
-		auto it = std::find_if(presets.begin(), presets.end(),
-			[preset](const std::pair<const Preset*, bool>& element) { return element.first == preset; });
-		if (it != presets.end())
-			return (*it).second;
-		else
-			return 0;
+		size_t highest = 0;
+		for (auto it : presets) {
+			if (it.first->alias == preset->alias && it.second > highest)
+				highest = it.second;
+		}
+		return highest;
 	}
 
     const std::string& appconfig_section() const;
     const std::string& get_type(const Preset *preset) const;
     const std::string& get_vendor(const Preset *preset) const;
-	/*
-    template<class F> void filter_presets(std::string &type, const std::string &vendor, F cb) {
-		for (auto preset : presets) {
-			if ((type.empty() || get_type(preset.first) == type) && (vendor.empty() || get_vendor(preset.first) == vendor)) {
-				cb(preset.first, preset.second);
-			}
-		}
-    }
-	*/
+	
+
 	template<class F> void filter_presets(const Preset* printer, const std::string& type, const std::string& vendor, F cb) {
 		for (auto preset : presets) {
 			const Preset& prst = *(preset.first);
@@ -156,7 +138,7 @@ struct Materials
 			    (type.empty() || get_type(preset.first) == type) &&
 				(vendor.empty() || get_vendor(preset.first) == vendor)) {
 
-				cb(preset.first, preset.second);
+				cb(preset.first);
 			}
 		}
 	}
