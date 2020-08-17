@@ -64,11 +64,17 @@ openvdb::FloatGrid::Ptr mesh_to_grid(const TriangleMesh &mesh,
                                      float               interiorBandWidth,
                                      int                 flags)
 {
+//    openvdb::initialize();
+//    return openvdb::tools::meshToVolume<openvdb::FloatGrid>(
+//        TriangleMeshDataAdapter{mesh}, tr, exteriorBandWidth,
+//        interiorBandWidth, flags);
+
     openvdb::initialize();
 
     TriangleMeshPtrs meshparts = mesh.split();
 
-    auto it = std::remove_if(meshparts.begin(), meshparts.end(), [](TriangleMesh *m){
+    auto it = std::remove_if(meshparts.begin(), meshparts.end(),
+    [](TriangleMesh *m){
         m->require_shared_vertices();
         return !m->is_manifold() || m->volume() < EPSILON;
     });
@@ -84,6 +90,8 @@ openvdb::FloatGrid::Ptr mesh_to_grid(const TriangleMesh &mesh,
         if (grid && gridptr) openvdb::tools::csgUnion(*grid, *gridptr);
         else if (gridptr) grid = std::move(gridptr);
     }
+
+    grid = openvdb::tools::levelSetRebuild(*grid, 0., exteriorBandWidth, interiorBandWidth);
 
     return grid;
 }
