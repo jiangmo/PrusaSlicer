@@ -108,6 +108,14 @@ struct Materials
 		return get_printer_counter(preset) == printers.size();
 	}
 
+    const Preset* get_preset_from_name(const std::string name) {
+        for (auto it = presets.begin(); it != presets.end(); ++it) {
+            if ((*it).first->alias == name)
+                return (*it).first;
+        }
+        return nullptr;
+    }
+
 	void add_printer_counter(const Preset* preset) {
 		for (auto it = presets.begin(); it != presets.end(); ++it) {
 			if ((*it).first->alias == preset->alias)
@@ -134,7 +142,6 @@ struct Materials
 			const Preset& prst = *(preset.first);
 			const Preset& prntr = *printer;
 		      if ((printer == nullptr || is_compatible_with_printer(PresetWithVendorProfile(prst, prst.vendor), PresetWithVendorProfile(prntr, prntr.vendor))) &&
-			//if ((printer == nullptr || is_compatible_with_printer(PresetWithVendorProfile(prst, nullptr), PresetWithVendorProfile(prntr, nullptr))) &&
 			    (type.empty() || get_type(preset.first) == type) &&
 				(vendor.empty() || get_vendor(preset.first) == vendor)) {
 

@@ -593,10 +593,14 @@ PageMaterials::PageMaterials(ConfigWizard *parent, Materials *materials, wxStrin
     grid->Add(list_profile, 1, wxEXPAND);
 
     auto *btn_sizer = new wxBoxSizer(wxHORIZONTAL);
+    //auto* printer_none = new wxButton(this, wxID_ANY, _(L("PNone")));
     auto *sel_all = new wxButton(this, wxID_ANY, _(L("All")));
     auto *sel_none = new wxButton(this, wxID_ANY, _(L("None")));
+    //btn_sizer->Add(printer_none);
     btn_sizer->Add(sel_all, 0, wxRIGHT, em / 2);
     btn_sizer->Add(sel_none);
+
+   
 
     grid->Add(new wxBoxSizer(wxHORIZONTAL));
     grid->Add(new wxBoxSizer(wxHORIZONTAL));
@@ -604,8 +608,8 @@ PageMaterials::PageMaterials(ConfigWizard *parent, Materials *materials, wxStrin
 
     append(grid, 1, wxEXPAND);
 
-	list_printer->Bind(wxEVT_LISTBOX, [this](wxCommandEvent&) {
-		update_lists(list_printer->GetSelection(), list_type->GetSelection(), list_vendor->GetSelection());
+	list_printer->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& evt) {
+		update_lists(evt.GetInt(), list_type->GetSelection(), list_vendor->GetSelection());
 		});
     list_type->Bind(wxEVT_LISTBOX, [this](wxCommandEvent &) {
         update_lists(list_printer->GetSelection(), list_type->GetSelection(), list_vendor->GetSelection());
@@ -615,9 +619,13 @@ PageMaterials::PageMaterials(ConfigWizard *parent, Materials *materials, wxStrin
     });
 
     list_profile->Bind(wxEVT_CHECKLISTBOX, [this](wxCommandEvent &evt) { select_material(evt.GetInt()); });
+    list_profile->Bind(wxEVT_LISTBOX, [this](wxCommandEvent& evt) { on_material_highlighted(evt.GetInt()); });
 
     sel_all->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { select_all(true); });
     sel_none->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { select_all(false); });
+
+    //printer_none->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { list_printer->SetSelection(wxNOT_FOUND); 
+    //                                                           update_lists(0, 0, 0); });
 
     reload_presets();
 }
@@ -651,22 +659,20 @@ void PageMaterials::on_material_highlighted(int sel_material)
 	list_printer->SetSelection(wxNOT_FOUND);
 	//selected material string
 	std::string material_name = list_profile->get_data(sel_material);
-	//select printers matching selected material
-	for (size_t i = 1; i < list_printer->GetCount(); i++) {
-		const std::string& printer_name = list_printer->get_data(i);
-		const Preset* printer = nullptr;
-		for (const Preset* it : materials->printers) {
-			if (it->name == printer_name) {
-				printer = it;
-				break;
-			}
-		}
-		materials->filter_presets(printer, EMPTY, EMPTY, [this, i](const Preset* p) {
-			if (p->get_alias() == material_name) {
-				
-			}
-			});
-	}
+    // get material preset
+    const Preset* material = materials->get_preset_from_name(material_name);
+    if (material == nullptr)
+        return;
+    //find matching printers
+    for (const Preset* printer : materials->printers) {
+        if (is_compatible_with_printer(PresetWithVendorProfile(*material, material->vendor), PresetWithVendorProfile(*printer, printer->vendor))) {
+            //select printer
+            int index = list_printer->find(printer->name);
+            list_printer->SetSelection(index);
+        }
+    }
+    update_lists(0,0,0);
+    list_profile->SetSelection(list_profile->find(material_name));
 }
 
 void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
@@ -681,6 +687,17 @@ void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
 		list_type->Clear();
 		list_type->append(_(L("(All)")), &EMPTY);
 		if (sel_printers_count > 0) {
+            // If all is selected with other printers
+            // unselect "all" or all printers depending on last value
+            if (sel_printers[0] == 0 && sel_printers_count > 1) {
+                if (sel_printer == 0) {
+                    list_printer->SetSelection(wxNOT_FOUND);
+                    list_printer->SetSelection(0);
+                } else {
+                    list_printer->SetSelection(0, false);
+                    sel_printers_count = list_printer->GetSelections(sel_printers);
+                }
+            }
 			if (sel_printers[0] != 0) {
 				for (size_t i = 0; i < sel_printers_count; i++) {
 					const std::string& printer_name = list_printer->get_data(sel_printers[i]);
@@ -698,8 +715,11 @@ void PageMaterials::update_lists(int sel_printer, int sel_type, int sel_vendor)
 						}
 						});
 				}
-			}
-			else {
+			} else {
+                //clear selection except "ALL"
+                list_printer->SetSelection(wxNOT_FOUND);
+                list_printer->SetSelection(0);
+
 				materials->filter_presets(nullptr, EMPTY, EMPTY, [this](const Preset* p) {
 					const std::string& type = this->materials->get_type(p);
 					if (list_type->find(type) == wxNOT_FOUND) {
