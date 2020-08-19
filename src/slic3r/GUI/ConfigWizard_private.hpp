@@ -264,6 +264,7 @@ struct PagePrinters: ConfigWizardPage
 template<class T, class D> struct DataList : public T
 {
     DataList(wxWindow *parent) : T(parent, wxID_ANY) {}
+	DataList(wxWindow* parent, int style) : T(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, NULL, style) {}
 
     // Note: We're _not_ using wxLB_SORT here because it doesn't do the right thing,
     // eg. "ABS" is sorted before "(All)"
@@ -310,7 +311,7 @@ struct PageMaterials: ConfigWizardPage
 
     void reload_presets();
 	void update_lists(int sel1, int sel2, int sel3);
-    //void update_lists(int sel1, int sel2);
+	void on_material_highlighted(int sel_material);
     void select_material(int i);
     void select_all(bool select);
     void clear();
