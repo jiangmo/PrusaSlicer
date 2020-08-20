@@ -736,7 +736,7 @@ void PageMaterials::on_material_hovered(int sel_material)
     //update_lists(0,0,0);
     this->compatible_printers->SetLabel(boost::nowide::widen(compatible_printers_label));
     this->compatible_printers->Wrap(compatible_printers_width);
-    Refresh();
+    //Refresh();
 }
 
 void PageMaterials::on_material_highlighted(int sel_material)
