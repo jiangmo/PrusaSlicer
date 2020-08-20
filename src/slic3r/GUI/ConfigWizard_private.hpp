@@ -108,12 +108,13 @@ struct Materials
 		return get_printer_counter(preset) == printers.size();
 	}
 
-    const Preset* get_preset_from_name(const std::string name) {
+    const std::vector<const Preset*> get_presets_by_alias(const std::string name) {
+        std::vector<const Preset*> ret_vec;
         for (auto it = presets.begin(); it != presets.end(); ++it) {
             if ((*it).first->alias == name)
-                return (*it).first;
+                ret_vec.push_back((*it).first);
         }
-        return nullptr;
+        return ret_vec;
     }
 
 	void add_printer_counter(const Preset* preset) {
@@ -299,6 +300,25 @@ template<class T, class D> struct DataList : public T
     }
 
     int size() { return this->GetCount(); }
+
+    void on_mouse_move(const wxPoint& position) {
+        int item = T::HitTest(position);
+       
+        if(item == wxHitTest::wxHT_WINDOW_INSIDE)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_WINDOW_INSIDE";
+        else if (item == wxHitTest::wxHT_WINDOW_OUTSIDE)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_WINDOW_OUTSIDE";
+        else if(item == wxHitTest::wxHT_WINDOW_CORNER)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_WINDOW_CORNER";
+        else if (item == wxHitTest::wxHT_WINDOW_VERT_SCROLLBAR)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_WINDOW_VERT_SCROLLBAR";
+       else if (item == wxHitTest::wxHT_NOWHERE)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_NOWHERE";
+       else if (item == wxHitTest::wxHT_MAX)
+            BOOST_LOG_TRIVIAL(error) << "hit test wxHT_MAX";
+       else
+            BOOST_LOG_TRIVIAL(error) << "hit test: " << item;
+    }
 };
 
 typedef DataList<wxListBox, std::string> StringList;
@@ -312,17 +332,30 @@ struct PageMaterials: ConfigWizardPage
     int sel_printer_prev, sel_type_prev, sel_vendor_prev;
     bool presets_loaded;
 
+    wxFlexGridSizer *grid;
+    wxStaticText *compatible_printers;
+    int compatible_printers_width = { 100 };
+    std::string empty_printers_label;
+    bool first_paint = { false };
     static const std::string EMPTY;
+    int last_hovered_item = { -1 } ;
 
     PageMaterials(ConfigWizard *parent, Materials *materials, wxString title, wxString shortname, wxString list1name);
 
     void reload_presets();
 	void update_lists(int sel1, int sel2, int sel3);
 	void on_material_highlighted(int sel_material);
+    void on_material_hovered(int sel_material);
     void select_material(int i);
     void select_all(bool select);
     void clear();
+    void prepare_compatible_printers_label();
+    void clear_compatible_printers_label();
 
+    void on_paint();
+    void on_mouse_move_on_profiles(wxMouseEvent& evt);
+    void on_mouse_enter_profiles(wxMouseEvent& evt);
+    void on_mouse_leave_profiles(wxMouseEvent& evt);
     virtual void on_activate() override;
 };
 
