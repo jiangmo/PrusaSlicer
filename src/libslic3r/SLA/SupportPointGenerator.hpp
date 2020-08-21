@@ -23,7 +23,7 @@ public:
         float minimal_distance {1.f};
         float head_diameter {0.4f};
         ///////////////
-        inline float support_force() const { return 50.f / density_relative; } // a force one point can support       (arbitrary force unit)
+        inline float support_force() const { return 7.7f / density_relative; } // a force one point can support       (arbitrary force unit)
         inline float tear_pressure() const { return 1.f; }  // pressure that the display exerts    (the force unit per mm2)
     };
     

@@ -163,7 +163,7 @@ static std::vector<SupportPointGenerator::MyLayer> make_layers(
       SupportPointGenerator::MyLayer &layer_below = layers[layer_id - 1];
       //FIXME WTF?
       const float layer_height = (layer_id!=0 ? heights[layer_id]-heights[layer_id-1] : heights[0]);
-      const float safe_angle = 15.f * (float(M_PI)/180.f); // smaller number - less supports
+      const float safe_angle = 35.f * (float(M_PI)/180.f); // smaller number - less supports
       const float between_layers_offset = scaled<float>(layer_height * std::tan(safe_angle));
       const float slope_angle = 75.f * (float(M_PI)/180.f); // smaller number - less supports
       const float slope_offset = scaled<float>(layer_height * std::tan(slope_angle));
@@ -249,13 +249,13 @@ void SupportPointGenerator::process(const std::vector<ExPolygons>& slices, const
         for (Structure &top : layer_top->islands)
             for (Structure::Link &bottom_link : top.islands_below) {
                 Structure &bottom = *bottom_link.island;
-                float centroids_dist = (bottom.centroid - top.centroid).norm();
+//                float centroids_dist = (bottom.centroid - top.centroid).norm();
                 // Penalization resulting from centroid offset:
 //                  bottom.supports_force *= std::min(1.f, 1.f - std::min(1.f, (1600.f * layer_height) * centroids_dist * centroids_dist / bottom.area));
                 float &support_force = support_force_bottom[&bottom - layer_bottom->islands.data()];
 //FIXME this condition does not reflect a bifurcation into a one large island and one tiny island well, it incorrectly resets the support force to zero.
 // One should rather work with the overlap area vs overhang area.
-                support_force *= std::min(1.f, 1.f - std::min(1.f, 0.1f * centroids_dist * centroids_dist / bottom.area));
+//                support_force *= std::min(1.f, 1.f - std::min(1.f, 0.1f * centroids_dist * centroids_dist / bottom.area));
                 // Penalization resulting from increasing polygon area:
                 support_force *= std::min(1.f, 20.f * bottom.area / top.area);
             }
@@ -300,8 +300,8 @@ void SupportPointGenerator::add_support_points(SupportPointGenerator::Structure 
 
     float tp      = m_config.tear_pressure();
     float current = s.supports_force_total();
-    static constexpr float SLOPE_DAMPING = 2e-4f;
-    static constexpr float DANGL_DAMPING = 1.f / 5.f;
+    static constexpr float SLOPE_DAMPING = .0015f;
+    static constexpr float DANGL_DAMPING = .09f;
 
     if (s.islands_below.empty()) {
         // completely new island - needs support no doubt
@@ -316,12 +316,12 @@ void SupportPointGenerator::add_support_points(SupportPointGenerator::Structure 
         // What we now have in polygons needs support, regardless of what the forces are, so we can add them.
 
         double a = std::accumulate(s.dangling_areas.begin(), s.dangling_areas.end(), 0., areafn);
-        uniformly_cover(s.dangling_areas, s, a * tp - current * DANGL_DAMPING, grid3d, false, false);
+        uniformly_cover(s.dangling_areas, s, a * tp - current * DANGL_DAMPING * std::sqrt(1. - a / s.area), grid3d, false, false);
     }
 
     if (! s.overhangs_slopes.empty()) {
         double a = std::accumulate(s.overhangs_slopes.begin(), s.overhangs_slopes.end(), 0., areafn);
-        uniformly_cover(s.overhangs_slopes, s, a * tp - current * SLOPE_DAMPING, grid3d, false, false);
+        uniformly_cover(s.overhangs_slopes, s, a * tp -  current * SLOPE_DAMPING * std::sqrt(1. - a / s.area), grid3d, false, false);
     }
 
     if (! s.overhangs.empty()) {
