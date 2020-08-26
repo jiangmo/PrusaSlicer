@@ -9,15 +9,18 @@
 #include <libslic3r/SimplifyMesh.hpp>
 #include "Model.hpp"
 
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_reduce.h>
+
 namespace Slic3r {
 namespace sla {
 
-double area(const Vec3d &p1, const Vec3d &p2, const Vec3d &p3) {
-    Vec3d a = p2 - p1;
-    Vec3d b = p3 - p1;
-    Vec3d c = a.cross(b);
-    return 0.5 * c.norm();
-}
+//double area(const Vec3d &p1, const Vec3d &p2, const Vec3d &p3) {
+//    Vec3d a = p2 - p1;
+//    Vec3d b = p3 - p1;
+//    Vec3d c = a.cross(b);
+//    return 0.5 * c.norm();
+//}
 
 using VertexFaceMap = std::vector<std::vector<size_t>>;
 
@@ -45,51 +48,60 @@ double calculate_model_supportedness(const TriangleMesh & mesh,
 
     double score = 0.;
 
-//    double zmin = mesh.bounding_box().min.z();
+//    double zmin = 0;
+//    for (auto & v : mesh.its.vertices)
+//        zmin = std::min(zmin, double((tr * v.cast<double>()).z()));
 
-//    std::vector<Vec3d> normals(mesh.its.indices.size(), Vec3d::Zero());
 
-    double zmin = 0;
-    for (auto & v : mesh.its.vertices)
-        zmin = std::min(zmin, double((tr * v.cast<double>()).z()));
-
-    for (size_t fi = 0; fi < mesh.its.indices.size(); ++fi) {
-        const auto &face = mesh.its.indices[fi];
-        Vec3d p1 = tr * mesh.its.vertices[face(0)].cast<double>();
-        Vec3d p2 = tr * mesh.its.vertices[face(1)].cast<double>();
-        Vec3d p3 = tr * mesh.its.vertices[face(2)].cast<double>();
-
-//        auto triang = std::array<Vec3d, 3> {p1, p2, p3};
-//        double a = area(triang.begin(), triang.end());
-        double a = area(p1, p2, p3);
-
-        double zlvl = zmin + 0.1;
-        if (p1.z() <= zlvl && p2.z() <= zlvl && p3.z() <= zlvl) {
-            score += a * POINTS_PER_UNIT_AREA;
-            continue;
+    double zmin = tbb::parallel_reduce(
+                tbb::blocked_range(size_t(0), mesh.its.vertices.size()),
+                0.,
+                [&mesh, &tr](const auto& rng, double init)
+    {
+        double zmin = 0;
+        for (auto vi = rng.begin(); vi < rng.end(); ++vi) {
+            Vec3d v = tr * mesh.its.vertices[vi].template cast<double>();
+            zmin = std::min(zmin, v.z());
         }
 
+        return std::min(init, zmin);
 
-        Eigen::Vector3d U = p2 - p1;
-        Eigen::Vector3d V = p3 - p1;
-        Vec3d           N = U.cross(V).normalized();
+    }, [](double a, double b) { return std::min(a, b); });
 
-        double phi = std::acos(N.dot(DOWN)) / PI;
+    score = tbb::parallel_reduce(
+                tbb::blocked_range(size_t(0), mesh.its.indices.size()),
+                0.,
+                [&mesh, &tr, zmin](const auto& rng, double score) {
+        for(auto fi = rng.begin(); fi != rng.end(); ++fi) {
+            const auto &face = mesh.its.indices[fi];
+            Vec3d p1 = tr * mesh.its.vertices[face(0)].template cast<double>();
+            Vec3d p2 = tr * mesh.its.vertices[face(1)].template cast<double>();
+            Vec3d p3 = tr * mesh.its.vertices[face(2)].template cast<double>();
 
-        std::cout << "area: " << a << std::endl;
+            Vec3d U = p2 - p1;
+            Vec3d V = p3 - p1;
+            Vec3d C = U.cross(V);
+            Vec3d N = C.normalized();
+            double area = 0.5 * C.norm();
 
-        score += a * POINTS_PER_UNIT_AREA * phi;
-//        normals[fi] = N;
-    }
+            double zlvl = zmin + 0.1;
+            if (p1.z() <= zlvl && p2.z() <= zlvl && p3.z() <= zlvl) {
+//                score += area * POINTS_PER_UNIT_AREA;
+                continue;
+            }
 
-//    for (size_t vi = 0; vi < mesh.its.vertices.size(); ++vi) {
-//        const std::vector<size_t> &neighbors = vmap[vi];
+            double phi = 1. - std::acos(N.dot(DOWN)) / PI;
+            phi = phi * (phi > 0.5);
 
-//        const auto &v = mesh.its.vertices[vi];
-//        Vec3d vt =  tr * v.cast<double>();
-//    }
+            //                    std::cout << "area: " << area << std::endl;
 
-    return score;
+            score += area * POINTS_PER_UNIT_AREA * phi;
+        }
+
+        return score;
+    }, [](double a, double b) { return a + b; });
+
+    return score / mesh.its.indices.size();
 }
 
 std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
@@ -126,6 +138,8 @@ std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
     auto objfunc = [&mesh, &status, &statuscb, &stopcond, max_tries]
         (const opt::Input<2> &in)
     {
+        std::cout << "in: " << in[0] << " " << in[1] << std::endl;
+
         // prepare the rotation transformation
         Transform3d rt = Transform3d::Identity();
         rt.rotate(Eigen::AngleAxisd(in[1], Vec3d::UnitY()));
@@ -142,9 +156,9 @@ std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
 
     // Firing up the genetic optimizer. For now it uses the nlopt library.
 
-    opt::Optimizer<opt::AlgNLoptDIRECT> solver(opt::StopCriteria{}
+    opt::Optimizer<opt::AlgBruteForce<100>> solver(opt::StopCriteria{}
                                            .max_iterations(max_tries)
-                                           .rel_score_diff(1e-3)
+                                           .rel_score_diff(1e-6)
                                            .stop_condition(stopcond));
 
     // We are searching rotations around the three axes x, y, z. Thus the
@@ -153,7 +167,7 @@ std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
     auto b = opt::Bound{-PI, PI};
 
     // Now we start the optimization process with initial angles (0, 0, 0)
-    auto result = solver.to_max().optimize(objfunc, opt::initvals({0.0, 0.0}),
+    auto result = solver.to_min().optimize(objfunc, opt::initvals({0.0, 0.0}),
                                            opt::bounds({b, b}));
 
     // Save the result and fck off

@@ -126,15 +126,16 @@ public:
                        "Optimizer unimplemented for given method!");
     }
 
-    Optimizer<Method> &to_min() { return *this; }
-    Optimizer<Method> &to_max() { return *this; }
-    Optimizer<Method> &set_criteria(const StopCriteria &) { return *this; }
+    Optimizer &to_min() { return *this; }
+    Optimizer &to_max() { return *this; }
+    Optimizer &set_criteria(const StopCriteria &) { return *this; }
     StopCriteria get_criteria() const { return {}; };
 
+    // Func has signatur: double(const Input<N> &input)
     template<class Func, size_t N>
-    Result<N> optimize(Func&& func,
-                       const Input<N> &initvals,
-                       const Bounds<N>& bounds) { return {}; }
+    Result<N> optimize(Func&& /*func*/,
+                       const Input<N> &/*initvals*/,
+                       const Bounds<N>& /*bounds*/) { return {}; }
 
     // optional for randomized methods:
     void seed(long /*s*/) {}
@@ -369,6 +370,90 @@ using AlgNLoptGenetic = detail::NLoptAlgComb<NLOPT_GN_ESCH>;
 using AlgNLoptSubplex = detail::NLoptAlg<NLOPT_LN_SBPLX>;
 using AlgNLoptSimplex = detail::NLoptAlg<NLOPT_LN_NELDERMEAD>;
 using AlgNLoptDIRECT  = detail::NLoptAlg<NLOPT_GN_DIRECT>;
+using AlgNLoptMLSL    = detail::NLoptAlg<NLOPT_GN_MLSL>;
+
+
+namespace bruteforce_detail {
+// Implementing a bruteforce optimizer
+
+template<int D, size_t GridSz, size_t N, class Fn, class Cmp>
+void gen(std::array<size_t, N> &idx, Result<N> &result, const Bounds<N> &bounds, Fn &&fn, Cmp &&cmp)
+{
+    if constexpr (D < 0) {
+        Input<N> inp;
+
+        for (size_t d = 0; d < N; ++d) {
+            const Bound &b = bounds[d];
+            double step = (b.max() - b.min()) / GridSz;
+            inp[d] = b.min() + idx[d] * step;
+        }
+
+        auto score = fn(inp);
+        if (cmp(score, result.score)) {
+            result.score = score;
+            result.optimum = inp;
+        }
+
+    } else {
+        for (size_t i = 0; i <= GridSz; ++i) {
+            idx[D] = i;
+            gen<D - 1, GridSz>(idx, result, bounds, std::forward<Fn>(fn), std::forward<Cmp>(cmp));
+        }
+    }
+}
+
+template<size_t gridSz> struct AlgBurteForce {
+    bool to_min;
+
+    template<class Fn, size_t N>
+    Result<N> optimize(Fn&& fn,
+                       const Input<N> &/*initvals*/,
+                       const Bounds<N>& bounds)
+    {
+        std::array<size_t, N> idx = {};
+        Result<N> result;
+
+        if (to_min)
+            gen<int(N) - 1, gridSz>(idx, result, bounds, std::forward<Fn>(fn), std::less<double>{});
+        else
+            gen<int(N) - 1, gridSz>(idx, result, bounds, std::forward<Fn>(fn), std::greater<double>{});
+
+        return result;
+    }
+};
+
+} // namespace bruteforce_detail
+
+template<size_t GridSize>
+using AlgBruteForce = bruteforce_detail::AlgBurteForce<GridSize>;
+
+template<size_t GridS>
+class Optimizer<AlgBruteForce<GridS>> {
+    AlgBruteForce<GridS> m_alg;
+    StopCriteria m_scr;
+
+public:
+
+    Optimizer& to_max() { m_alg.to_min = false; return *this; }
+    Optimizer& to_min() { m_alg.to_min = true;  return *this; }
+
+    template<class Func, size_t N>
+    Result<N> optimize(Func&& func,
+                       const Input<N> &initvals,
+                       const Bounds<N>& bounds)
+    {
+        return m_alg.optimize(std::forward<Func>(func), initvals, bounds);
+    }
+
+    explicit Optimizer(StopCriteria stopcr = {}) : m_scr(stopcr) {}
+
+    Optimizer &set_criteria(const StopCriteria &cr)
+    {
+        m_scr = cr; return *this;
+    }
+
+    const StopCriteria &get_criteria() const { return m_scr; }
+};
 
 // TODO: define others if needed...
 
