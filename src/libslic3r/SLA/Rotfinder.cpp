@@ -12,12 +12,11 @@
 namespace Slic3r {
 namespace sla {
 
-template<class It> double area(It from, It to) {
-    double area = 0.;
-    for (auto it = from, ite = std::prev(to); it != to; ite = it++)
-        area += double((*it)(0) + (*ite)(0)) * double((*it)(1) - (*ite)(1));
-
-    return area;
+double area(const Vec3d &p1, const Vec3d &p2, const Vec3d &p3) {
+    Vec3d a = p2 - p1;
+    Vec3d b = p3 - p1;
+    Vec3d c = a.cross(b);
+    return 0.5 * c.norm();
 }
 
 using VertexFaceMap = std::vector<std::vector<size_t>>;
@@ -60,20 +59,24 @@ double calculate_model_supportedness(const TriangleMesh & mesh,
         Vec3d p2 = tr * mesh.its.vertices[face(1)].cast<double>();
         Vec3d p3 = tr * mesh.its.vertices[face(2)].cast<double>();
 
-        auto triang = std::array<Vec3d, 3> {p1, p2, p3};
-        double a = area(triang.begin(), triang.end());
+//        auto triang = std::array<Vec3d, 3> {p1, p2, p3};
+//        double a = area(triang.begin(), triang.end());
+        double a = area(p1, p2, p3);
 
         double zlvl = zmin + 0.1;
         if (p1.z() <= zlvl && p2.z() <= zlvl && p3.z() <= zlvl) {
-            score -= a * POINTS_PER_UNIT_AREA;
+            score += a * POINTS_PER_UNIT_AREA;
             continue;
         }
+
 
         Eigen::Vector3d U = p2 - p1;
         Eigen::Vector3d V = p3 - p1;
         Vec3d           N = U.cross(V).normalized();
 
-        double phi = std::sqrt(std::max(1. - std::acos(N.dot(DOWN)) / PI, 0.5));
+        double phi = std::acos(N.dot(DOWN)) / PI;
+
+        std::cout << "area: " << a << std::endl;
 
         score += a * POINTS_PER_UNIT_AREA * phi;
 //        normals[fi] = N;
@@ -150,7 +153,7 @@ std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
     auto b = opt::Bound{-PI, PI};
 
     // Now we start the optimization process with initial angles (0, 0, 0)
-    auto result = solver.to_min().optimize(objfunc, opt::initvals({0.0, 0.0}),
+    auto result = solver.to_max().optimize(objfunc, opt::initvals({0.0, 0.0}),
                                            opt::bounds({b, b}));
 
     // Save the result and fck off
