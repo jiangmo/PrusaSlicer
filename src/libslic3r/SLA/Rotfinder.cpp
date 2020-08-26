@@ -156,7 +156,7 @@ std::array<double, 2> find_best_rotation(const ModelObject& modelobj,
 
     // Firing up the genetic optimizer. For now it uses the nlopt library.
 
-    opt::Optimizer<opt::AlgBruteForce<100>> solver(opt::StopCriteria{}
+    opt::Optimizer<opt::AlgBruteForce<10>> solver(opt::StopCriteria{}
                                            .max_iterations(max_tries)
                                            .rel_score_diff(1e-6)
                                            .stop_condition(stopcond));
