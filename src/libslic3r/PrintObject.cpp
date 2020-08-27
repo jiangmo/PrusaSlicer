@@ -437,6 +437,11 @@ void PrintObject::prepare_adaptive_infill_data()
     float fill_density = this->print()->full_print_config().opt_float("fill_density");
     float infill_extrusion_width = this->print()->full_print_config().opt_float("infill_extrusion_width");
 
+    if(infill_extrusion_width <= 0 || infill_extrusion_width <= 0)
+    {
+        return;
+    }
+
     coordf_t line_spacing = infill_extrusion_width / ((fill_density / 100.0f) * 0.333333333f);
 
     BoundingBoxf bed_shape(this->print()->config().bed_shape.values);

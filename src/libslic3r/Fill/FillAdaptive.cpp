@@ -88,7 +88,7 @@ void FillAdaptive::generate_polylines(
 
         float rotation_angle = Geometry::deg2rad(120.0);
 
-        for (int i = 0; i < polylines_out.size(); i++)
+        for (size_t i = 0; i < polylines_out.size(); i++)
         {
             Vec3d offset = cube->center - origin;
             Point from_abs(from), to_abs(to);
@@ -149,7 +149,7 @@ std::unique_ptr<FillAdaptive_Internal::Octree> FillAdaptive::build_octree(
 {
     using namespace FillAdaptive_Internal;
 
-    if(line_spacing <= 0)
+    if(line_spacing <= 0 || std::isnan(line_spacing))
     {
         return nullptr;
     }
